@@ -72,6 +72,22 @@ This guide covers:
 
 - **[Tracing and Monitoring](./docs/other_features.md#tracing-and-monitoring)** - View console logs in Azure portal and App Insights tracing in Microsoft Foundry for debugging and performance monitoring.
 
+### Local AI Orchestration (Ollama)
+
+This repo includes PowerShell scripts to run a local AI orchestrator backed by Ollama:
+
+- `install-ollama.ps1` — installs Ollama and pulls the `qwen2.5-coder:1.5b-base` model
+- `copilot-orchestrator.ps1` — launches GitHub Copilot CLI pointing at the local Ollama backend (`http://localhost:11434`)
+
+Usage:
+
+```powershell
+.\install-ollama.ps1            # one-time setup
+.\copilot-orchestrator.ps1      # start orchestrator
+```
+
+The orchestrator exposes other CLI agents (`codex`, `droid`, `pi`, `opencode`, `openclaw`) inside the Copilot session for shell-based delegation.
+
 ## Resource Clean-up
 
 To prevent incurring unnecessary charges, it's important to clean up your Azure resources after completing your work with the application.

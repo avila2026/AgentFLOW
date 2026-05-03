@@ -14,7 +14,7 @@ if (Get-Command ollama -ErrorAction SilentlyContinue) {
     Write-Host "Ollama ja esta instalado: $(ollama --version)" -ForegroundColor Green
 } else {
     Write-Host "Baixando Ollama..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri $OllamaUrl -OutFile $OllamaInstaller -UseBasicParsing
+    Invoke-WebRequest -Uri $OllamaUrl -OutFile $OllamaInstaller -UseBasicParsing -ErrorAction Stop
     Write-Host "Instalando..." -ForegroundColor Yellow
     Start-Process -FilePath $OllamaInstaller -ArgumentList "/SILENT" -Wait
     Write-Host "Ollama instalado. Reinicie o terminal e rode este script novamente." -ForegroundColor Green
