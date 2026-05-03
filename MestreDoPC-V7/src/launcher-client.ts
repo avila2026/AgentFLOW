@@ -5,9 +5,9 @@
  * to execute PowerShell commands safely.
  */
 
-import { logger } from './logger.js';
-import { buildSafeCommand, detectInjection } from './security/sanitizer.js';
-import { validateToolParams } from './security/whitelist.js';
+import { logger } from './logger';
+import { buildSafeCommand, detectInjection } from './security/sanitizer';
+import { validateToolParams } from './security/whitelist';
 
 /**
  * Launcher configuration
@@ -30,7 +30,7 @@ interface RunResponse {
  */
 interface RunStatusResponse {
   status: 'running' | 'completed' | 'failed';
-  result?: any;
+  result?: unknown;
   error?: string;
 }
 
@@ -131,7 +131,7 @@ async function pollForCompletion(
 export async function executeLauncherCommand(
   toolName: string,
   params: Record<string, string>
-): Promise<any> {
+): Promise<unknown> {
   const requestLogger = logger.child({ toolName, params: Object.keys(params) });
 
   // Validate parameters against whitelist
