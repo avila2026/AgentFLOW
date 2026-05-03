@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 GitHub Copilot CLI como ORQUESTRADOR central.
-Modelo: qwen3-coder-next:cloud (via Ollama).
+Modelo: qwen2.5-coder:1.5b-base (via Ollama).
 
 Copilot pode invocar diretamente os outros agentes pelo shell:
    claude, codex, droid, pi, opencode, openclaw
