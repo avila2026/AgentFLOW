@@ -1,0 +1,11 @@
+{
+  "name": "@agentflow/local-ai",
+  "version": "1.0.0",
+  "description": "Integração local e remota com Ollama e Genkit",
+  "main": "src/index.ts",
+  "dependencies": {
+    "genkit": "^0.0.1",
+    "genkitx-ollama": "^0.0.1",
+    "google-auth-library": "^9.0.0"
+  }
+}
