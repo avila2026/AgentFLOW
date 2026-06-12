@@ -225,7 +225,6 @@ IMPORTANTE: Forneça insights práticos e prontos para uso. Retorne APENAS o JSO
     try {
       const response = await generateText(prompt, {
         model: GEMINI_FLASH_MODEL,
-        tools: [{ googleSearch: {} }]
       });
 
       // PROTOCOLO ANTIGRAVIT

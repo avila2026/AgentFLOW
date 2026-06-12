@@ -1,19 +1,49 @@
 import { GEMINI_IMAGE_MODEL } from '../../../constants';
 import { getGeminiClient } from '../gemini';
+import { getOpenAIClient } from '../openai';
 import { proxyFetch } from '../../core/api';
 import { ImageOptions, ImageResult } from './types';
-import { isClientSideFallbackAllowed, validateModelCapability, ImageModuleError } from './utils';
+import { isClientSideFallbackAllowed, validateModelCapability } from './utils';
+
+const aspectRatioToSize = (aspectRatio?: string): '1024x1024' | '1792x1024' | '1024x1792' => {
+    if (!aspectRatio) return '1024x1024';
+    const [w, h] = aspectRatio.split(':').map(Number);
+    if (!w || !h) return '1024x1024';
+    if (w > h) return '1792x1024';
+    if (h > w) return '1024x1792';
+    return '1024x1024';
+};
 
 export const generateImageInternal = async (prompt: string, options?: ImageOptions): Promise<ImageResult> => {
     const modelId = options?.model || GEMINI_IMAGE_MODEL;
 
-    // 1. Validate Capability
-    const validation = validateModelCapability(modelId, 'generate');
-    if (!validation.valid) {
-        return { type: 'error', code: 'INVALID_MODEL', message: validation.error || 'Modelo inválido' };
+    // 1. Try OpenAI DALL-E 3 (Primary)
+    try {
+        const openai = await getOpenAIClient(undefined, options?.userId);
+        const size = aspectRatioToSize(options?.aspectRatio);
+
+        const dalleResponse = await openai.images.generate({
+            model: 'dall-e-3',
+            prompt: prompt.substring(0, 4000),
+            n: 1,
+            size,
+            response_format: 'b64_json',
+        });
+
+        const b64 = dalleResponse.data?.[0]?.b64_json;
+        if (b64) {
+            return {
+                type: 'image',
+                imageUrl: `data:image/png;base64,${b64}`,
+                mimeType: 'image/png',
+                base64: b64
+            };
+        }
+    } catch (dalleError: any) {
+        console.warn("DALL-E generation failed, trying fallback:", dalleError?.message || dalleError);
     }
 
-    // 2. Try Backend Proxy (Preferred)
+    // 2. Try Backend Proxy (Secondary)
     try {
         const response = await proxyFetch<any>('generate-image', 'POST', {
             prompt,

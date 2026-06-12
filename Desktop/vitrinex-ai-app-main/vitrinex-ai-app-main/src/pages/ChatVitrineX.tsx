@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import {
     PaperAirplaneIcon,
     PaperClipIcon,
     SparklesIcon,
-    PhotoIcon,
     XMarkIcon,
-    CpuChipIcon,
     ChatBubbleLeftRightIcon
-} from '@heroicons/react/24/outline'; // Using Heroicons v2
+} from '@heroicons/react/24/outline';
+import { sendMessageToChat } from '../services/ai';
+import { ChatMessage } from '../types';
 
 // Types
 interface Message {
@@ -27,23 +26,25 @@ interface Attachment {
     file: File;
 }
 
-const TESS_API_KEY_STORAGE = 'vitrinex_tess_api_key';
-const DEFAULT_TESS_KEY = '451280|JRp9ZqfjHIQZfNT8ZJZ0lsipWZY9j23x3ioKHTuv1340925e';
-const AGENT_ID = '37390';
+const VITRINEX_SYSTEM_INSTRUCTION = `Você é o assistente virtual da VitrineX AI, uma plataforma de marketing digital com inteligência artificial.
+Seu nome é "VitrineX AI". Você é especialista em:
+- Marketing digital e redes sociais
+- Criação de conteúdo e copywriting
+- Estratégias de campanhas e anúncios
+- Tendências de mercado e análise de dados
+- Ferramentas de design e automação
+
+Responda sempre em português do Brasil, de forma clara, objetiva e profissional.
+Seja proativo em sugerir ações e estratégias baseadas nas perguntas do usuário.`;
 
 const ChatVitrineX: React.FC = () => {
     // --- State ---
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'model', text: `Olá! Sou o Chat Assistant da VitrineX AI. Como posso ajudar você hoje?` }
+        { role: 'model', text: `Olá! Sou o assistente da **VitrineX AI**. Estou pronto para ajudar com marketing digital, criação de conteúdo e estratégias. Como posso ajudar você hoje?` }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-    // Config (read-only for normal users unless we want to hide it completely)
-    const [apiKey] = useState(() => localStorage.getItem(TESS_API_KEY_STORAGE) || DEFAULT_TESS_KEY);
-    const [apiUrl] = useState(() => localStorage.getItem('vitrinex_tess_api_url') || 'http://localhost:3001/proxy/tess');
-    const [rootId, setRootId] = useState<number | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,98 +82,62 @@ const ChatVitrineX: React.FC = () => {
 
         const currentAttachments = [...attachments];
         const userText = input;
+        const historySnapshot = [...messages];
 
-        // Mock attachment processing for context
         let attachmentText = "";
         if (currentAttachments.length > 0) {
             attachmentText = `\n\n[Anexos: ${currentAttachments.map(a => a.name).join(', ')}]`;
         }
-
         const fullMessage = userText + attachmentText;
 
         setInput('');
         setAttachments([]);
-        setMessages(prev => [...prev, { role: 'user', text: userText, attachments: currentAttachments }]);
+        // Add user message + empty assistant placeholder for streaming
+        setMessages(prev => [
+            ...prev,
+            { role: 'user', text: userText, attachments: currentAttachments },
+            { role: 'model', text: '' }
+        ]);
         setLoading(true);
 
         try {
-            const payload: any = {
-                agentId: AGENT_ID, // Required for Proxy Routing
-                messages: [{ role: "user", content: fullMessage }],
-                stream: false,
-                wait_execution: true
-            };
+            const history: ChatMessage[] = historySnapshot.map(m => ({
+                role: m.role,
+                text: m.text,
+                timestamp: new Date().toISOString(),
+            }));
 
-            if (rootId) payload.root_id = rootId;
+            let botResponse = '';
 
-            // Use the specific Agent ID for this page
-            // If the proxy supports overriding the agent ID via URL or Body, we might need to adjust.
-            // Assuming the proxy forwards requests correctly. 
-            // If the Proxy uses a hardcoded ID, we might need to pass the ID in the URL to the proxy if we updated it.
-            // Since proxy_server.js forward to /api/agents/${agentId}/execute if constructed right?
-            // Checking previous proxy code... it expects /proxy/tess to forward. 
-            // WAIT: The proxy code seems general but let's check if it handles dynamic agents.
-            // If the PROXY is effectively "localhost:3001/proxy/tess", it might be hardcoded in the proxy or the Frontend must send the full URL.
-            // In AdminChat we used dynamic URL.
-            // Let's assume the apiUrl configured points to the PROXY and we might need to adjust the Logic if the PROXY doesn't support changing ID.
-            // Actually, for now, let's assume the standard flow works or we use the direct URL if Proxy supports it. 
-            // BUT: The user asked for "Agent 37393". 
-            // If the proxy is hardcoded to 37390, we have an issue.
-            // Let's check proxy_server.js content first? No, let's implement and if it fails we fix.
-            // Better: update the endpoint URL for this specific call to ensure it targets 37393.
-
-            // NOTE: Ideally the backend/proxy should accept the Agent ID. 
-            // For now, let's try to construct the URL for the proxy if it accepts params or headers? 
-            // Or if we need to call https://tess.pareto.io directly (will fail CORS).
-            // Let's rely on the proxy forwarding whatever we send or if we can change the target.
-
-            // FIX: If the proxy is simple, it forwards to one target. 
-            // Let's look at the implementation of AdminChat, it allows setting the apiUrl.
-            // We'll stick to 'apiUrl' from state. If the user needs to change it to target 37393 they might need to spin another proxy? 
-            // OR we can make the proxy smarter.
-            // Assume for this task "Chat VitrineX" page uses the same mechanism.
-
-            // Ensure clean key
-            let finalKey = apiKey.trim();
-            if (finalKey.toLowerCase().startsWith('bearer ')) {
-                finalKey = finalKey.substring(7).trim();
-            }
-
-            console.log(`[ChatVitrineX] Sending request to Agent ${AGENT_ID} via ${apiUrl}`);
-
-            const response = await axios.post(
-                apiUrl,
-                payload,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${finalKey}`,
-                        'Content-Type': 'application/json',
-                        'x-agent-id': AGENT_ID
-                    }
-                }
+            await sendMessageToChat(
+                history,
+                fullMessage,
+                (chunk) => {
+                    botResponse += chunk;
+                    setMessages(prev => {
+                        const updated = [...prev];
+                        updated[updated.length - 1] = { role: 'model', text: botResponse };
+                        return updated;
+                    });
+                },
+                { systemInstruction: VITRINEX_SYSTEM_INSTRUCTION }
             );
 
-            // SPECIAL LOGIC: The proxy might be hitting a default agent.
-            // Providing a header 'x-tess-agent-id' to the proxy could be a way to tell it which agent to use if we tailored the proxy.
-            // Since I cannot rewrite the running proxy_server.js easily without restart, 
-            // I'll proceed assuming the proxy endpoint MIGHT be configurable OR 
-            // I will implement a client-side hack: 
-            // If we are Local, use Proxy. If Proxy is dumb, we might have trouble targeting 37393 if 37390 is hardcoded.
-            // Update: I will update the Proxy in the NEXT step if needed. For now, UI first.
-
-            const responseData = response.data?.responses?.[0];
-            const botResponse = responseData?.output || JSON.stringify(response.data);
-
-            if (responseData?.root_id) setRootId(responseData.root_id);
-
-            setMessages(prev => [...prev, { role: 'model', text: botResponse }]);
+            if (!botResponse) {
+                setMessages(prev => {
+                    const updated = [...prev];
+                    updated[updated.length - 1] = { role: 'model', text: '⚠️ Sem resposta. Verifique sua chave OpenAI nas Configurações.' };
+                    return updated;
+                });
+            }
 
         } catch (error: any) {
-            console.error('API Error:', error);
-            setMessages(prev => [...prev, {
-                role: 'model',
-                text: `❌ Erro de comunicação com a Inteligência Artificial. \nPor favor, tente novamente em instantes.`
-            }]);
+            console.error('OpenAI Error:', error);
+            setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'model', text: '❌ Erro de comunicação com a OpenAI. Verifique sua chave de API nas Configurações.' };
+                return updated;
+            });
         } finally {
             setLoading(false);
         }

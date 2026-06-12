@@ -32,17 +32,16 @@ export interface GenerateTextOptions {
 }
 
 export const generateText = async (prompt: string, options?: GenerateTextOptions): Promise<string> => {
-    const isGptModel = options?.model?.startsWith('gpt-');
-    const hasTools = options?.tools && options.tools.length > 0;
-    const routeToOpenAI = options?.useOpenAI || isGptModel || hasTools || (options?.useOllama === false);
-    
+    // Default to OpenAI unless Ollama is explicitly requested
+    const routeToOpenAI = options?.useOllama !== true;
+
     const defaultTemp = 1.0;
 
     try {
-        const client = routeToOpenAI 
+        const client = routeToOpenAI
             ? await getOpenAIClient(undefined, options?.userId)
             : await getOllamaClient();
-            
+
         let modelToUse = options?.model;
         if (!modelToUse || modelToUse.includes('gemini')) {
             modelToUse = routeToOpenAI ? OPENAI_DEFAULT_MODEL : OLLAMA_DEFAULT_MODEL;
@@ -71,7 +70,13 @@ export const generateText = async (prompt: string, options?: GenerateTextOptions
         }
         
         if (options?.tools && options.tools.length > 0) {
-            requestOptions.tools = options.tools;
+            // Filter out Gemini-specific tools (googleSearch, codeExecution) incompatible with OpenAI
+            const compatibleTools = options.tools.filter(
+                (t: any) => !t.googleSearch && !t.codeExecution
+            );
+            if (compatibleTools.length > 0) {
+                requestOptions.tools = compatibleTools;
+            }
         }
 
         let response = await client.chat.completions.create(requestOptions);
