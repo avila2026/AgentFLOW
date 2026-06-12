@@ -31,91 +31,124 @@ export interface GenerateTextOptions {
     useOllama?: boolean;
 }
 
+const buildTextRequest = (
+    prompt: string,
+    modelToUse: string,
+    options?: GenerateTextOptions
+): any => {
+    const messages: any[] = [];
+    if (options?.systemInstruction) {
+        messages.push({ role: 'system', content: options.systemInstruction });
+    }
+    messages.push({ role: 'user', content: prompt });
+
+    const req: any = {
+        model: modelToUse,
+        messages,
+        temperature: options?.temperature ?? 1.0,
+        top_p: options?.topP,
+        max_tokens: options?.maxOutputTokens,
+        stop: options?.stopSequences,
+        seed: options?.seed,
+    };
+
+    if (options?.responseMimeType === 'application/json' || options?.responseSchema) {
+        req.response_format = { type: 'json_object' };
+    }
+
+    if (options?.tools && options.tools.length > 0) {
+        const compatibleTools = options.tools.filter(
+            (t: any) => !t.googleSearch && !t.codeExecution
+        );
+        if (compatibleTools.length > 0) {
+            req.tools = compatibleTools;
+        }
+    }
+
+    return { req, messages };
+};
+
+const runChatLoop = async (client: any, req: any, messages: any[], options?: GenerateTextOptions): Promise<string> => {
+    let response = await client.chat.completions.create(req);
+    let iterations = 0;
+    const MAX_ITERATIONS = 5;
+
+    while (response.choices[0].message.tool_calls?.length > 0 && iterations < MAX_ITERATIONS) {
+        iterations++;
+        const message = response.choices[0].message;
+        messages.push(message);
+
+        for (const toolCall of message.tool_calls) {
+            let toolResult: unknown;
+            try {
+                const { executeTool } = await import('./tools');
+                const args = JSON.parse((toolCall as any).function.arguments || '{}');
+                toolResult = await executeTool((toolCall as any).function.name, args, { userId: options?.userId });
+            } catch (toolError) {
+                toolResult = { error: `Erro na ferramenta: ${(toolError as Error).message}` };
+            }
+            messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+            });
+        }
+
+        req.messages = messages;
+        response = await client.chat.completions.create(req);
+    }
+
+    return response.choices[0].message.content || '';
+};
+
 export const generateText = async (prompt: string, options?: GenerateTextOptions): Promise<string> => {
     // Default to OpenAI unless Ollama is explicitly requested
-    const routeToOpenAI = options?.useOllama !== true;
+    const forceOllama = options?.useOllama === true;
 
-    const defaultTemp = 1.0;
+    if (forceOllama) {
+        // Use Ollama directly (local, private)
+        const client = await getOllamaClient();
+        const model = (options?.model && !options.model.includes('gemini')) ? options.model : OLLAMA_DEFAULT_MODEL;
+        const { req, messages } = buildTextRequest(prompt, model, options);
+        try {
+            return await runChatLoop(client, req, messages, options);
+        } catch (error) {
+            console.error('Ollama generation failed:', error);
+            throw error;
+        }
+    }
 
+    // Try OpenAI first, fallback to Ollama gpt-oss:120b-cloud if it fails
     try {
-        const client = routeToOpenAI
-            ? await getOpenAIClient(undefined, options?.userId)
-            : await getOllamaClient();
+        const client = await getOpenAIClient(undefined, options?.userId);
+        const model = (options?.model && !options.model.includes('gemini')) ? options.model : OPENAI_DEFAULT_MODEL;
+        const { req, messages } = buildTextRequest(prompt, model, options);
+        return await runChatLoop(client, req, messages, options);
+    } catch (openAIError: any) {
+        const isQuotaOrNetwork =
+            openAIError?.status === 429 ||
+            openAIError?.status === 503 ||
+            openAIError?.code === 'ECONNREFUSED' ||
+            openAIError?.message?.includes('quota') ||
+            openAIError?.message?.includes('network');
 
-        let modelToUse = options?.model;
-        if (!modelToUse || modelToUse.includes('gemini')) {
-            modelToUse = routeToOpenAI ? OPENAI_DEFAULT_MODEL : OLLAMA_DEFAULT_MODEL;
-        }
-        
-        let messages: any[] = [];
-        
-        if (options?.systemInstruction) {
-            messages.push({ role: 'system', content: options.systemInstruction });
-        }
-        
-        messages.push({ role: 'user', content: prompt });
-
-        const requestOptions: any = {
-            model: modelToUse,
-            messages,
-            temperature: options?.temperature ?? defaultTemp,
-            top_p: options?.topP,
-            max_tokens: options?.maxOutputTokens,
-            stop: options?.stopSequences,
-            seed: options?.seed,
-        };
-        
-        if (options?.responseMimeType === 'application/json' || options?.responseSchema) {
-             requestOptions.response_format = { type: 'json_object' };
-        }
-        
-        if (options?.tools && options.tools.length > 0) {
-            // Filter out Gemini-specific tools (googleSearch, codeExecution) incompatible with OpenAI
-            const compatibleTools = options.tools.filter(
-                (t: any) => !t.googleSearch && !t.codeExecution
-            );
-            if (compatibleTools.length > 0) {
-                requestOptions.tools = compatibleTools;
-            }
-        }
-
-        let response = await client.chat.completions.create(requestOptions);
-        
-        let iterations = 0;
-        const MAX_ITERATIONS = 5;
-
-        while (response.choices[0].message.tool_calls && response.choices[0].message.tool_calls.length > 0 && iterations < MAX_ITERATIONS) {
-            iterations++;
-            const message = response.choices[0].message;
-            messages.push(message); 
-
-            for (const toolCall of message.tool_calls) {
-                let toolResult;
-                try {
-                    const { executeTool } = await import('./tools');
-                    const args = JSON.parse((toolCall as any).function.arguments || '{}');
-                    toolResult = await executeTool((toolCall as any).function.name, args, { userId: options?.userId });
-                } catch (toolError) {
-                    console.error(`Falha ao executar ferramenta ${(toolCall as any).function.name}:`, toolError);
-                    toolResult = { error: `Erro na ferramenta: ${(toolError as Error).message}` };
-                }
-
-                messages.push({
-                    role: 'tool',
-                    tool_call_id: toolCall.id,
-                    content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+        if (isQuotaOrNetwork) {
+            console.warn('[VitrineX] OpenAI indisponível, usando fallback Ollama gpt-oss:120b-cloud...');
+            try {
+                const ollamaClient = await getOllamaClient();
+                const { req: ollamaReq, messages: ollamaMessages } = buildTextRequest(prompt, OLLAMA_DEFAULT_MODEL, {
+                    ...options,
+                    // Ollama doesn't support response_format in all models
+                    responseMimeType: undefined,
                 });
+                return await runChatLoop(ollamaClient, ollamaReq, ollamaMessages, options);
+            } catch (ollamaError) {
+                console.error('Ollama fallback também falhou:', ollamaError);
             }
-
-            requestOptions.messages = messages;
-            response = await client.chat.completions.create(requestOptions);
         }
 
-        return response.choices[0].message.content || '';
-
-    } catch (error) {
-        console.error(`${routeToOpenAI ? 'OpenAI' : 'Ollama'} generation failed:`, error);
-        throw error;
+        console.error('OpenAI generation failed:', openAIError);
+        throw openAIError;
     }
 };
 
