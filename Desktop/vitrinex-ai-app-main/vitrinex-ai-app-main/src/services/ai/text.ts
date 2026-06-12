@@ -31,6 +31,14 @@ export interface GenerateTextOptions {
     useOllama?: boolean;
 }
 
+// Reasoning models (gpt-oss, nemotron, etc.) consume tokens on an internal
+// `reasoning` field before producing `content`. A low max_tokens makes them
+// burn the whole budget thinking and return empty content, so we enforce a floor.
+const isReasoningModel = (model: string): boolean =>
+    /gpt-oss|nemotron|reasoning|o1|o3|deepseek-r/i.test(model);
+
+const REASONING_MIN_TOKENS = 2048;
+
 const buildTextRequest = (
     prompt: string,
     modelToUse: string,
@@ -42,12 +50,17 @@ const buildTextRequest = (
     }
     messages.push({ role: 'user', content: prompt });
 
+    let maxTokens = options?.maxOutputTokens;
+    if (isReasoningModel(modelToUse) && (!maxTokens || maxTokens < REASONING_MIN_TOKENS)) {
+        maxTokens = REASONING_MIN_TOKENS;
+    }
+
     const req: any = {
         model: modelToUse,
         messages,
         temperature: options?.temperature ?? 1.0,
         top_p: options?.topP,
-        max_tokens: options?.maxOutputTokens,
+        max_tokens: maxTokens,
         stop: options?.stopSequences,
         seed: options?.seed,
     };
@@ -98,7 +111,10 @@ const runChatLoop = async (client: any, req: any, messages: any[], options?: Gen
         response = await client.chat.completions.create(req);
     }
 
-    return response.choices[0].message.content || '';
+    const finalMessage = response.choices[0].message;
+    // Reasoning models may leave `content` empty and expose the answer via
+    // a non-standard `reasoning` field — fall back to it so we never return "".
+    return finalMessage.content || (finalMessage as any).reasoning || '';
 };
 
 export const generateText = async (prompt: string, options?: GenerateTextOptions): Promise<string> => {
