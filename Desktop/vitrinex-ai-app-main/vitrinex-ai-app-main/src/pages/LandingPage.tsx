@@ -44,7 +44,7 @@ export const LandingPage: React.FC = () => {
 
     const handleSaveKey = () => {
         if (apiKey.trim()) {
-            localStorage.setItem('vitrinex_gemini_api_key', apiKey.trim());
+            localStorage.setItem('vitrinex_openai_api_key', apiKey.trim());
             // Opcional: Recarregar a página ou notificar sucesso
             alert('Chave de acesso salva com sucesso! O sistema agora está ativo.');
             setShowApiKey(false);
@@ -147,7 +147,7 @@ export const LandingPage: React.FC = () => {
                                                         type={showPassword ? 'text' : 'password'}
                                                         value={apiKey}
                                                         onChange={(e) => setApiKey(e.target.value)}
-                                                        placeholder="Cole sua API Key do Google AI Studio"
+                                                        placeholder="Cole sua API Key da OpenAI"
                                                         className="w-full bg-[#111827] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
                                                     />
                                                     <button

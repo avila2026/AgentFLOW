@@ -3,21 +3,20 @@ import { KeyIcon } from '@heroicons/react/24/outline';
 import Button from '../ui/Button';
 
 interface ApiKeyModalProps {
-    onSave: (geminiKey: string, openaiKey: string) => void;
+    onSave: (openaiKey: string) => void;
 }
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSave }) => {
-    const [geminiKey, setGeminiKey] = useState('');
     const [openAiKey, setOpenAiKey] = useState('');
     const [error, setError] = useState('');
 
     const handleSave = () => {
-        if (!geminiKey.trim() || !openAiKey.trim()) {
-            setError('Por favor, preencha ambas as chaves de API.');
+        if (!openAiKey.trim()) {
+            setError('Por favor, insira sua chave de API da OpenAI.');
             return;
         }
         setError('');
-        onSave(geminiKey.trim(), openAiKey.trim());
+        onSave(openAiKey.trim());
     };
 
     return (
@@ -29,7 +28,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSave }) => {
                     </div>
                     <h2 className="text-2xl font-bold text-[var(--text-primary)]">Configuração Necessária</h2>
                     <p className="text-sm text-[var(--text-secondary)] mt-2">
-                        Para utilizar a inteligência artificial do VitrineX, você precisa informar as chaves de API. Elas são salvas de forma segura no seu navegador.
+                        Para utilizar a inteligência artificial do VitrineX, você precisa informar a sua chave de API da OpenAI. Ela é salva de forma segura no seu navegador.
                     </p>
                 </div>
                 
@@ -39,19 +38,6 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onSave }) => {
                             {error}
                         </div>
                     )}
-                    
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wider">
-                            Google Gemini API Key
-                        </label>
-                        <input
-                            type="password"
-                            placeholder="AIzaSy..."
-                            className="w-full bg-[var(--background-input)] border border-[var(--border-default)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-primary transition-colors"
-                            value={geminiKey}
-                            onChange={(e) => setGeminiKey(e.target.value)}
-                        />
-                    </div>
                     
                     <div className="space-y-2">
                         <label className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-wider">

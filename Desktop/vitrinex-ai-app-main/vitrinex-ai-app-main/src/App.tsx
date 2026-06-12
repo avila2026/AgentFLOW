@@ -99,23 +99,21 @@ const AppContent: React.FC = () => {
     // Initial check for API keys
     useEffect(() => {
         if (user) {
-            const savedGemini = localStorage.getItem('vitrinex_gemini_api_key');
             const savedOpenAi = localStorage.getItem('vitrinex_openai_api_key');
             
-            if (!savedGemini || !savedOpenAi) {
+            if (!savedOpenAi) {
                 setShowApiKeyModal(true);
             }
         }
     }, [user]);
 
-    const handleSaveApiKeys = (gemini: string, openai: string) => {
-        localStorage.setItem('vitrinex_gemini_api_key', gemini);
+    const handleSaveApiKeys = (openai: string) => {
         localStorage.setItem('vitrinex_openai_api_key', openai);
         setShowApiKeyModal(false);
         addToast({
             type: 'success',
             title: 'Configuração Concluída',
-            message: 'Suas chaves de API foram salvas com sucesso.'
+            message: 'Sua chave de API da OpenAI foi salva com sucesso.'
         });
     };
 

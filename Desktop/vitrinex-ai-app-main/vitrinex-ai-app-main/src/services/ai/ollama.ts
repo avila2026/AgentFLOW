@@ -15,9 +15,25 @@ export interface OllamaCapabilityStatus {
   message: string;
 }
 
+export const getOllamaBaseUrl = (): string => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const localUrl = window.localStorage.getItem('vitrinex_ollama_base_url');
+    if (localUrl) return localUrl;
+  }
+  return OLLAMA_DEFAULT_BASE_URL;
+};
+
+export const getOllamaModel = (): string => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const localModel = window.localStorage.getItem('vitrinex_ollama_model');
+    if (localModel) return localModel;
+  }
+  return OLLAMA_DEFAULT_MODEL;
+};
+
 export const getOllamaClient = async (): Promise<OpenAI> => {
   return new OpenAI({
-    baseURL: OLLAMA_DEFAULT_BASE_URL,
+    baseURL: getOllamaBaseUrl(),
     apiKey: 'ollama', // Dummy key required by the OpenAI SDK
     dangerouslyAllowBrowser: true
   });
@@ -27,7 +43,7 @@ export const generateTextOllama = async (
   prompt: string,
   options?: GenerateTextOllamaOptions
 ): Promise<string> => {
-  const modelToUse = options?.model || OLLAMA_DEFAULT_MODEL;
+  const modelToUse = options?.model || getOllamaModel();
 
   try {
     const client = await getOllamaClient();
@@ -58,12 +74,13 @@ export const generateTextOllama = async (
   }
 };
 
+
 export const testOllamaConnection = async (): Promise<string> => {
   try {
     const client = await getOllamaClient();
 
     const response = await client.chat.completions.create({
-      model: OLLAMA_DEFAULT_MODEL,
+      model: getOllamaModel(),
       messages: [{ role: 'user', content: "Diga 'Conexão com Ollama estabelecida com sucesso.' em português." }]
     });
 
