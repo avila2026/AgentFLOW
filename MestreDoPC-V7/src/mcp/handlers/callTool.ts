@@ -26,7 +26,11 @@ export async function handleCallTool(request: CallToolRequest): Promise<{ conten
   }
 
   try {
-    const params = (args as Record<string, string> | undefined)?.params || {};
+    const providedArgs = args as Record<string, unknown> | undefined;
+    const params =
+      providedArgs && 'params' in providedArgs && providedArgs.params && typeof providedArgs.params === 'object'
+        ? (providedArgs.params as Record<string, string>)
+        : (providedArgs as Record<string, string> | undefined) || {};
     const result = await tool.execute(params);
 
     toolLogger.info({ success: result.success }, 'Tool execution completed');

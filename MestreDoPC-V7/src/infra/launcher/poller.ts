@@ -23,8 +23,9 @@ export async function pollUntil<T>(
   while (Date.now() - startTime < timeoutMs) {
     try {
       const check = await predicate();
+      const status = (check.result as { status?: string } | undefined)?.status;
 
-      if (check.done) {
+      if (check.done && status !== 'queued' && status !== 'running') {
         return check.result as T;
       }
 
